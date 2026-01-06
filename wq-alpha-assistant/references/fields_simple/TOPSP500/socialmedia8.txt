@@ -1,0 +1,3 @@
+id
+snt_social_value
+snt_social_volume
