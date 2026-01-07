@@ -19,12 +19,13 @@
 - 其他Universe（TOP1000/TOP500等）除非用户明确指定，否则不读取
 - **字段描述查询**: 若字段名含义不明，用Grep在`references/data_fields_txt/TOP3000/`中搜索该字段名，获取完整描述（第2列）
 
-### 规则2: 表达式去重
-- **生成前**: 必须检查 `references/clean_alpha/` 目录下所有txt文件
-- **生成后**: 将新表达式写入该目录，命名规则: `YYYYMMDD_序号_类型.txt`
-- **禁止重复**: 已存在的表达式不能再次输出
+### 规则2: 输出规范（强制）
+- **分号结尾**: 每个表达式必须以`;`分号结尾
+- **直接输出**: 表达式直接在终端输出，**不写入任何文件**
+- **不查clean_alpha**: 生成时**不查询**`clean_alpha/`里的具体表达式
 
 ### 规则3: 模板去重（核心）
+**查询文件**: `references/template_dedup_rules.md` 和 `references/template_patterns.md`
 **禁止同一模板换字段！** 以下视为同一模板：
 - `rank(assets)` 和 `rank(price)` → 同属 `rank(<field/>)` 模板
 - `ts_rank(close, 22)` 和 `ts_rank(volume, 22)` → 同属 `ts_rank(<field/>, d)` 模板
@@ -49,17 +50,37 @@
 
 **用户反馈禁止项时**：立即追加到`forbidden_items.md`
 
+### 规则6: 复杂度要求（强制）
+**禁止生成过于简单的表达式**：
+- ❌ 单个datafield: `close`, `volume`, `returns`
+- ❌ 单层operator+单字段: `rank(close)`, `ts_rank(volume, 20)`, `group_rank(returns, industry)`
+- ❌ 简单算术: `close/volume`, `high - low`
+
+**最低复杂度标准**（至少满足一项）：
+- ✅ 2层以上嵌套: `rank(ts_delta(close, 5))`, `group_rank(ts_zscore(volume, 20), industry)`
+- ✅ 多字段组合运算: `ts_corr(close, volume, 20)`, `(close - open) / (high - low)`
+- ✅ 条件逻辑: `trade_when(condition, signal, fallback)`, `if_else(cond, a, b)`
+- ✅ 复合信号: `rank(field1) * rank(field2)`, `ts_rank(a, d) - ts_rank(b, d)`
+
+**复杂度检测规则**：
+```
+简单模式（禁止）:
+- ^[a-z_]+$                           # 单字段
+- ^(rank|zscore)\([a-z_]+\)$          # rank/zscore单字段
+- ^ts_\w+\([a-z_]+,\s*\d+\)$          # ts_op单字段
+- ^group_\w+\([a-z_]+,\s*\w+\)$       # group_op单字段
+```
+
 ---
 
 ## 工作流程
 
 ### 生成Alpha表达式
-1. **读取字段**: 从 `references/data_fields_txt/TOP3000/` 获取可用字段
+1. **读取字段**: 从 `references/fields_simple/TOP3000/` 获取可用字段
 2. **禁止项检查**: 读取 `references/forbidden_items.md`，排除禁止字段/操作符
-3. **去重检查**: 扫描 `references/clean_alpha/` 和 `references/template_dedup_rules.md`
+3. **模板去重**: 查询 `references/template_dedup_rules.md`，避免使用已有模板结构
 4. **生成表达式**: 基于金融逻辑，确保不使用禁止项和重复模板
-5. **写入记录**: 追加到 `references/clean_alpha/YYYYMMDD_序号_类型.txt`
-6. **输出结果**: 返回表达式+逻辑解释
+5. **直接输出**: 在终端输出，每行一个表达式，以`;`结尾
 
 ### 学习成功表达式
 1. **解析结构**: 识别算子嵌套、字段、参数
@@ -100,6 +121,8 @@ C:\Users\nay\.claude\skills\wq-alpha-assistant\references\
 
 ### 生成表达式时（根据数量决定格式）
 
+**重要**: 每个表达式必须以`;`分号结尾，直接输出到终端
+
 **数量 > 30个**: 直接输出表达式列表，无需解释，无需汇总
 ```
 expression1;
@@ -111,7 +134,7 @@ expression3;
 **数量 ≤ 30个**: 每个表达式带解释，最后附汇总便于复制
 ```
 【表达式1】
-<expression>
+<expression>;
 【逻辑】<rationale>
 
 【表达式2】
@@ -137,6 +160,8 @@ expression3;
 
 ## 注意事项
 - 所有表达式必须符合BRAIN平台语法
+- **每个表达式必须以`;`分号结尾**
+- **直接输出到终端，不写入文件**
+- **不查询clean_alpha，只查询template文件**
 - **严格执行模板去重**：同结构换字段视为重复
 - 优先组合多个成功思想，创造新结构
-- 生成后必须写入clean_alpha目录
